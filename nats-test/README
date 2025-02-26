@@ -1,0 +1,5 @@
+kubectl port-forward POD_NAME 4222:4222
+
+npm run publish
+
+npm run listen
