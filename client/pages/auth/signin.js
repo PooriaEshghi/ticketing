@@ -1,48 +1,56 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Router from 'next/router';
+import Link from 'next/link';
 import useRequest from '../../hooks/use-request';
 
-export default () => {
+export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { doRequest, errors } = useRequest({
     url: '/api/users/signin',
     method: 'post',
-    body: {
-      email,
-      password
-    },
-    onSuccess: () => Router.push('/')
+    body: { email, password },
+    onSuccess: () => Router.push('/'),
   });
 
-  const onSubmit = async event => {
+  const onSubmit = async (event) => {
     event.preventDefault();
-
     await doRequest();
   };
 
   return (
-    <form onSubmit={onSubmit}>
-      <h1>Sign In</h1>
-      <div className="form-group">
-        <label>Email Address</label>
-        <input
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          className="form-control"
-        />
-      </div>
-      <div className="form-group">
-        <label>Password</label>
-        <input
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          type="password"
-          className="form-control"
-        />
-      </div>
-      {errors}
-      <button className="btn btn-primary">Sign In</button>
-    </form>
+    <section className="page narrow">
+      <p className="eyebrow">Account</p>
+      <h1>Sign in</h1>
+      <form className="stack-form" onSubmit={onSubmit}>
+        <label>
+          Email
+          <input
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            type="email"
+            autoComplete="email"
+            required
+          />
+        </label>
+        <label>
+          Password
+          <input
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            type="password"
+            autoComplete="current-password"
+            required
+          />
+        </label>
+        {errors}
+        <button className="button" type="submit">
+          Sign in
+        </button>
+      </form>
+      <p className="form-note">
+        New here? <Link href="/auth/signup">Create an account</Link>
+      </p>
+    </section>
   );
-};
+}

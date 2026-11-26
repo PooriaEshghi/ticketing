@@ -1,0 +1,107 @@
+name: CD
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: image ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth
+            image: ticketing-auth
+          - service: tickets
+            image: ticketing-tickets
+          - service: orders
+            image: ticketing-orders
+          - service: payments
+            image: ticketing-payments
+          - service: expiration
+            image: ticketing-expiration
+          - service: client
+            image: ticketing-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service }}
+          target: production
+          push: true
+          tags: |
+            ghcr.io/pooriaeshghi/${{ matrix.image }}:${{ github.sha }}
+            ghcr.io/pooriaeshghi/${{ matrix.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: deploy vps
+    needs: build
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare deploy directory
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: mkdir -p /opt/footlight
+      - name: Copy compose files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker-compose.prod.yml,infra/nats/Dockerfile,scripts/seed.mjs"
+          target: /opt/footlight
+          strip_components: 0
+      - name: Pull and restart
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          JWT_KEY: ${{ secrets.JWT_KEY }}
+          STRIPE_KEY: ${{ secrets.STRIPE_KEY }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: IMAGE_TAG,JWT_KEY,STRIPE_KEY,STRIPE_PUBLISHABLE_KEY,GHCR_PULL_TOKEN
+          script: |
+            set -euo pipefail
+            cd /opt/footlight
+            umask 077
+            if [ -n "${GHCR_PULL_TOKEN}" ]; then
+              printf '%s' "${GHCR_PULL_TOKEN}" | docker login ghcr.io -u pooriaeshghi --password-stdin
+            fi
+            cat > .env << EOF
+            IMAGE_TAG=${IMAGE_TAG}
+            JWT_KEY=${JWT_KEY}
+            STRIPE_KEY=${STRIPE_KEY}
+            STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+            DOMAIN=ticketing.paidastudio.com
+            LETSENCRYPT_EMAIL=admin@paidastudio.com
+            EOF
+            docker compose -f docker-compose.prod.yml pull auth tickets orders payments expiration client
+            docker compose -f docker-compose.prod.yml up -d --build
+            docker image prune -f

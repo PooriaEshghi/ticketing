@@ -1,0 +1,259 @@
+name: footlight
+
+services:
+  traefik:
+    image: traefik:v3.2
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=footlight
+      - --entrypoints.web.address=:80
+      - --ping=true
+    ports:
+      - "80:80"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [footlight]
+    restart: unless-stopped
+
+  nats:
+    build: ./infra/nats
+    image: footlight-nats:local
+    networks: [footlight]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+    networks: [footlight]
+    restart: unless-stopped
+
+  auth-mongo:
+    image: mongo:7
+    volumes: [auth-mongo:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks: [footlight]
+    restart: unless-stopped
+
+  tickets-mongo:
+    image: mongo:7
+    volumes: [tickets-mongo:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks: [footlight]
+    restart: unless-stopped
+
+  orders-mongo:
+    image: mongo:7
+    volumes: [orders-mongo:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks: [footlight]
+    restart: unless-stopped
+
+  payments-mongo:
+    image: mongo:7
+    volumes: [payments-mongo:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks: [footlight]
+    restart: unless-stopped
+
+  auth:
+    build:
+      context: ./auth
+      target: production
+    image: ghcr.io/pooriaeshghi/ticketing-auth:local
+    environment:
+      JWT_KEY: ${JWT_KEY:-dev-jwt-key-change-me}
+      MONGO_URI: mongodb://auth-mongo:27017/auth
+      COOKIE_SECURE: "false"
+    depends_on:
+      auth-mongo:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.auth.rule=PathPrefix(`/api/users`)
+      - traefik.http.routers.auth.entrypoints=web
+      - traefik.http.routers.auth.priority=100
+      - traefik.http.services.auth.loadbalancer.server.port=3000
+    networks: [footlight]
+    restart: unless-stopped
+
+  tickets:
+    build:
+      context: ./tickets
+      target: production
+    image: ghcr.io/pooriaeshghi/ticketing-tickets:local
+    environment:
+      JWT_KEY: ${JWT_KEY:-dev-jwt-key-change-me}
+      MONGO_URI: mongodb://tickets-mongo:27017/tickets
+      NATS_URL: http://nats:4222
+      NATS_CLUSTER_ID: footlight
+      NATS_CLIENT_ID: tickets
+      COOKIE_SECURE: "false"
+    depends_on:
+      tickets-mongo:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tickets.rule=PathPrefix(`/api/tickets`)
+      - traefik.http.routers.tickets.entrypoints=web
+      - traefik.http.routers.tickets.priority=100
+      - traefik.http.services.tickets.loadbalancer.server.port=3000
+    networks: [footlight]
+    restart: unless-stopped
+
+  orders:
+    build:
+      context: ./orders
+      target: production
+    image: ghcr.io/pooriaeshghi/ticketing-orders:local
+    environment:
+      JWT_KEY: ${JWT_KEY:-dev-jwt-key-change-me}
+      MONGO_URI: mongodb://orders-mongo:27017/orders
+      NATS_URL: http://nats:4222
+      NATS_CLUSTER_ID: footlight
+      NATS_CLIENT_ID: orders
+      COOKIE_SECURE: "false"
+    depends_on:
+      orders-mongo:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.orders.rule=PathPrefix(`/api/orders`)
+      - traefik.http.routers.orders.entrypoints=web
+      - traefik.http.routers.orders.priority=100
+      - traefik.http.services.orders.loadbalancer.server.port=3000
+    networks: [footlight]
+    restart: unless-stopped
+
+  payments:
+    build:
+      context: ./payments
+      target: production
+    image: ghcr.io/pooriaeshghi/ticketing-payments:local
+    environment:
+      JWT_KEY: ${JWT_KEY:-dev-jwt-key-change-me}
+      MONGO_URI: mongodb://payments-mongo:27017/payments
+      NATS_URL: http://nats:4222
+      NATS_CLUSTER_ID: footlight
+      NATS_CLIENT_ID: payments
+      STRIPE_KEY: ${STRIPE_KEY:-sk_test_replace_me}
+      COOKIE_SECURE: "false"
+    depends_on:
+      payments-mongo:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.payments.rule=PathPrefix(`/api/payments`)
+      - traefik.http.routers.payments.entrypoints=web
+      - traefik.http.routers.payments.priority=100
+      - traefik.http.services.payments.loadbalancer.server.port=3000
+    networks: [footlight]
+    restart: unless-stopped
+
+  expiration:
+    build:
+      context: ./expiration
+      target: production
+    image: ghcr.io/pooriaeshghi/ticketing-expiration:local
+    environment:
+      NATS_URL: http://nats:4222
+      NATS_CLUSTER_ID: footlight
+      NATS_CLIENT_ID: expiration
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks: [footlight]
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./client
+      target: production
+    image: ghcr.io/pooriaeshghi/ticketing-client:local
+    environment:
+      INTERNAL_API_URL: http://traefik
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+    depends_on:
+      auth:
+        condition: service_healthy
+      tickets:
+        condition: service_healthy
+      orders:
+        condition: service_healthy
+      payments:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.client.rule=PathPrefix(`/`)
+      - traefik.http.routers.client.entrypoints=web
+      - traefik.http.routers.client.priority=1
+      - traefik.http.services.client.loadbalancer.server.port=3000
+    networks: [footlight]
+    restart: unless-stopped
+
+  seed:
+    image: node:20-alpine
+    profiles: ["seed"]
+    volumes:
+      - ./scripts/seed.mjs:/seed.mjs:ro
+    environment:
+      SEED_BASE_URL: http://traefik
+      SEED_EMAIL: ${SEED_EMAIL:-demo@footlight.app}
+      SEED_PASSWORD: ${SEED_PASSWORD:-password}
+    command: ["node", "/seed.mjs"]
+    depends_on:
+      auth:
+        condition: service_healthy
+      tickets:
+        condition: service_healthy
+    networks: [footlight]
+    restart: "no"
+
+networks:
+  footlight:
+    name: footlight
+
+volumes:
+  auth-mongo:
+  tickets-mongo:
+  orders-mongo:
+  payments-mongo:

@@ -2,7 +2,7 @@ import request from 'supertest';
 import { app } from '../../app';
 import { Ticket } from '../../models/ticket';
 import { Order, OrderStatus } from '../../models/order';
-import { natsWrapper } from '../../__mocks__/nats-wrapper';
+import { natsWrapper } from '../../nats-wrapper';
 import mongoose from 'mongoose';
 
 it('marks an order as cancelled', async () => {
@@ -59,8 +59,5 @@ it('emits a order cancelled event', async () => {
     .send()
     .expect(204);
 
-  // expectation to make sure the thing is cancelled
-  const updatedOrder = await Order.findById(order.id);
-    expect(natsWrapper.client.publish).not.toHaveBeenCalled();
+  expect(natsWrapper.client.publish).toHaveBeenCalled();
 });
-// const orderId = new mongoose.Types.ObjectId().toHexString();

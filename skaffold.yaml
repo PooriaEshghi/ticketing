@@ -7,50 +7,58 @@ build:
   local:
     push: false
   artifacts:
-    - image: pooriaeshghi/auth
+    - image: ghcr.io/pooriaeshghi/ticketing-auth
       context: auth
       docker:
         dockerfile: Dockerfile
+        target: development
       sync:
         manual:
           - src: "src/**/*.ts"
             dest: .
-    - image: pooriaeshghi/ticketing-client
+    - image: ghcr.io/pooriaeshghi/ticketing-client
       context: client
       docker:
         dockerfile: Dockerfile
+        target: development
       sync:
         manual:
           - src: "**/*.js"
             dest: .
-    - image: pooriaeshghi/tickets
+          - src: "**/*.css"
+            dest: .
+    - image: ghcr.io/pooriaeshghi/ticketing-tickets
       context: tickets
       docker:
         dockerfile: Dockerfile
+        target: development
       sync:
         manual:
           - src: "src/**/*.ts"
             dest: .
-    - image: pooriaeshghi/orders
+    - image: ghcr.io/pooriaeshghi/ticketing-orders
       context: orders
       docker:
         dockerfile: Dockerfile
+        target: development
       sync:
         manual:
           - src: "src/**/*.ts"
             dest: .
-    - image: pooriaeshghi/expiration
+    - image: ghcr.io/pooriaeshghi/ticketing-expiration
       context: expiration
       docker:
         dockerfile: Dockerfile
+        target: development
       sync:
         manual:
           - src: "src/**/*.ts"
             dest: .
-    - image: pooriaeshghi/payments
+    - image: ghcr.io/pooriaeshghi/ticketing-payments
       context: payments
       docker:
         dockerfile: Dockerfile
+        target: development
       sync:
         manual:
           - src: "src/**/*.ts"

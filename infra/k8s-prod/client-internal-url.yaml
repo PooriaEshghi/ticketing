@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-depl
+spec:
+  template:
+    spec:
+      containers:
+        - name: client
+          env:
+            - name: INTERNAL_API_URL
+              value: http://traefik.kube-system.svc.cluster.local

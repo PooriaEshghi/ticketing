@@ -14,9 +14,12 @@ app.use(json());
 app.use(
   cookieSession({
     signed: false,
-    secure: process.env.NODE_ENV !== 'test',
+    secure: process.env.COOKIE_SECURE === 'true',
   })
 );
+app.get('/health', (_req, res) => {
+  res.status(200).send({ status: 'ok' });
+});
 app.use(currentUser);
 
 app.use(createTicketRouter);
@@ -24,7 +27,7 @@ app.use(showTicketRouter);
 app.use(indexTicketRouter);
 app.use(updateTicketRouter);
 
-app.all('*', async (req, res) => {
+app.all('*', async (_req, _res) => {
   throw new NotFoundError();
 });
 
