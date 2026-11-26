@@ -59,5 +59,9 @@ it('emits a order cancelled event', async () => {
     .send()
     .expect(204);
 
-  expect(natsWrapper.client.publish).toHaveBeenCalled();
+  const payload = JSON.parse(
+    (natsWrapper.client.publish as jest.Mock).mock.calls.at(-1)[1]
+  );
+  expect(payload.ticket.id).toEqual(ticket.id);
+  expect(payload.version).toBeGreaterThan(0);
 });

@@ -3,13 +3,21 @@ import { Message } from 'node-nats-streaming';
 import { queueGroupName } from './queue-group-name';
 import { Ticket } from '../../models/ticket';
 import { TicketUpdatedPublisher } from '../publishers/ticket-updated-publisher';
+import { readTicketId } from './ticket-ref';
 
 export class OrderCancelledListener extends Listener<OrderCancelledEvent> {
   subject: Subjects.OrderCancelled = Subjects.OrderCancelled;
   queueGroupName = queueGroupName;
 
   async onMessage(data: OrderCancelledEvent['data'], msg: Message) {
-    const ticket = await Ticket.findById(data.ticket.id);
+    const ticketId = readTicketId(data.ticket?.id);
+    if (!ticketId) {
+      console.error('Ignoring order:cancelled with an unreadable ticket id');
+      msg.ack();
+      return;
+    }
+
+    const ticket = await Ticket.findById(ticketId);
 
     if (!ticket) {
       throw new Error('Ticket not found');
