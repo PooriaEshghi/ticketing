@@ -2,7 +2,7 @@ name: footlight
 
 services:
   traefik:
-    image: traefik:v3.2
+    image: traefik:v3.8
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
