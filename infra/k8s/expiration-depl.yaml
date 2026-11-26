@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: expiration
-          image: pooriaeshghi/expiration
+          image: ghcr.io/pooriaeshghi/ticketing-expiration
           env:
             - name: NATS_CLIENT_ID
               valueFrom:
@@ -23,6 +23,20 @@ spec:
             - name: NATS_URL
               value: "http://nats-srv:4222"
             - name: NATS_CLUSTER_ID
-              value: ticketing
+              value: footlight
             - name: REDIS_HOST
               value: expiration-redis-srv
+            - name: REDIS_PORT
+              value: "6379"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20

@@ -1,7 +1,7 @@
+process.env.STRIPE_KEY = process.env.STRIPE_KEY || 'sk_test_ci';
+
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import request from 'supertest';
-import { app } from '../app';
 import jwt from 'jsonwebtoken';
 
 declare global {
@@ -39,10 +39,9 @@ afterAll(async () => {
   await mongoose.connection.close();
 });
 
-global.signin = () => {
-  // Build a JWT payload.  { id, email }
+global.signin = (id?: string) => {
   const payload = {
-    id: new mongoose.Types.ObjectId().toHexString(),
+    id: id || new mongoose.Types.ObjectId().toHexString(),
     email: 'test@test.com',
   };
 

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: auth
-          image: pooriaeshghi/auth
+          image: ghcr.io/pooriaeshghi/ticketing-auth
           env:
             - name: MONGO_URI
               value: 'mongodb://auth-mongo-srv:27017/auth'
@@ -23,6 +23,20 @@ spec:
                 secretKeyRef:
                   name: jwt-secret
                   key: JWT_KEY
+            - name: COOKIE_SECURE
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
 ---
 apiVersion: v1
 kind: Service

@@ -1,21 +1,36 @@
 import Queue from 'bull';
-import { ExpirationCompletePublisher } from '../events/publishers/expiration-complete-publisher';
-import { natsWrapper } from '../nats-wrapper';
+import Redis from 'ioredis';
+import { publishExpirationComplete } from './publish-expiration';
 
 interface Payload {
   orderId: string;
 }
 
-const expirationQueue = new Queue<Payload>('order:expiration', {
-  redis: {
+function createRedisClient() {
+  return new Redis({
     host: process.env.REDIS_HOST,
-  },
-});
-
-expirationQueue.process(async (job) => {
-  new ExpirationCompletePublisher(natsWrapper.client).publish({
-    orderId: job.data.orderId,
+    port: Number(process.env.REDIS_PORT || 6379),
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
   });
-});
+}
 
-export { expirationQueue };
+let expirationQueue: Queue.Queue<Payload> | undefined;
+
+export function getExpirationQueue() {
+  if (!process.env.REDIS_HOST) {
+    throw new Error('REDIS_HOST must be defined');
+  }
+
+  if (!expirationQueue) {
+    expirationQueue = new Queue<Payload>('order:expiration', {
+      createClient: () => createRedisClient(),
+    });
+
+    expirationQueue.process(async (job) => {
+      await publishExpirationComplete(job.data.orderId);
+    });
+  }
+
+  return expirationQueue;
+}

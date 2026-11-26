@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth, tickets, orders, payments, expiration, client]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+      - name: Install
+        working-directory: ${{ matrix.service }}
+        run: npm ci
+      - name: Lint
+        working-directory: ${{ matrix.service }}
+        run: npm run lint
+      - name: Typecheck
+        working-directory: ${{ matrix.service }}
+        run: npm run typecheck
+      - name: Test
+        working-directory: ${{ matrix.service }}
+        run: npm run test:ci

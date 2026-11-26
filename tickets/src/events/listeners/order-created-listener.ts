@@ -3,6 +3,7 @@ import { Listener, OrderCreatedEvent, Subjects } from '@petickets/common';
 import { queueGroupName } from './queue-group-name';
 import { Ticket } from '../../models/ticket';
 import { TicketUpdatedPublisher } from '../publishers/ticket-updated-publisher';
+import { readTicketId } from './ticket-ref';
 
 export class OrderCreatedListener extends Listener<OrderCreatedEvent> {
   subject: Subjects.OrderCreated = Subjects.OrderCreated;
@@ -10,7 +11,14 @@ export class OrderCreatedListener extends Listener<OrderCreatedEvent> {
 
   async onMessage(data: OrderCreatedEvent['data'], msg: Message) {
     // Find the ticket that the order is reserving
-    const ticket = await Ticket.findById(data.ticket.id);
+    const ticketId = readTicketId(data.ticket?.id);
+    if (!ticketId) {
+      console.error('Ignoring order:created with an unreadable ticket id');
+      msg.ack();
+      return;
+    }
+
+    const ticket = await Ticket.findById(ticketId);
 
     // If no ticket, throw error
     if (!ticket) {

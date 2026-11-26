@@ -16,7 +16,7 @@ router.delete(
   async (req: Request, res: Response) => {
     const { orderId } = req.params;
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId).populate('ticket');
 
     if (!order) {
       throw new NotFoundError();
@@ -27,12 +27,14 @@ router.delete(
     order.status = OrderStatus.Cancelled;
     await order.save();
 
+    // An unpopulated ref is an ObjectId, and ObjectId.id is a 12-byte buffer.
+    // Populate first so the event carries the hex string and the saved version.
     await new OrderCancelledPublisher(natsWrapper.client).publish({
       id: order.id,
       ticket: {
         id: order.ticket.id,
       },
-      version: 0
+      version: order.version,
     });
 
     // publishing an event saying this was cancelled!

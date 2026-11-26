@@ -6,6 +6,14 @@ import { Order } from '../../models/order';
 import { stripe } from '../../stripe';
 import { Payment } from '../../models/payment';
 
+jest.mock('../../stripe', () => ({
+  stripe: {
+    charges: {
+      create: jest.fn().mockResolvedValue({ id: 'ch_test' }),
+    },
+  },
+}));
+
 it('returns a 404 when purchasing an order that does not exist', async () => {
   await request(app)
     .post('/api/payments')
@@ -79,17 +87,15 @@ it('returns a 201 with valid inputs', async () => {
     })
     .expect(201);
 
-  const stripeCharges = await stripe.charges.list({ limit: 50 });
-  const stripeCharge = stripeCharges.data.find((charge) => {
-    return charge.amount === price * 100;
+  expect(stripe.charges.create).toHaveBeenCalledWith({
+    currency: 'usd',
+    amount: price * 100,
+    source: 'tok_visa',
   });
-
-  expect(stripeCharge).toBeDefined();
-  expect(stripeCharge!.currency).toEqual('usd');
 
   const payment = await Payment.findOne({
     orderId: order.id,
-    stripeId: stripeCharge!.id,
+    stripeId: 'ch_test',
   });
   expect(payment).not.toBeNull();
 });

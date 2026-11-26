@@ -34,7 +34,7 @@ const setup = async () => {
 };
 
 it('updates the ticket, publishes an event, and acks the message', async () => {
-  const { msg, data, ticket, orderId, listener } = await setup();
+  const { msg, data, ticket, listener } = await setup();
 
   await listener.onMessage(data, msg);
 
@@ -42,4 +42,18 @@ it('updates the ticket, publishes an event, and acks the message', async () => {
   expect(updatedTicket!.orderId).not.toBeDefined();
   expect(msg.ack).toHaveBeenCalled();
   expect(natsWrapper.client.publish).toHaveBeenCalled();
+});
+
+it('reads a ticket id that arrived as a JSON Buffer', async () => {
+  const { msg, data, ticket, listener } = await setup();
+  data.ticket.id = {
+    type: 'Buffer',
+    data: Array.from(Buffer.from(ticket.id, 'hex')),
+  } as unknown as string;
+
+  await listener.onMessage(data, msg);
+
+  const updatedTicket = await Ticket.findById(ticket.id);
+  expect(updatedTicket!.orderId).not.toBeDefined();
+  expect(msg.ack).toHaveBeenCalled();
 });

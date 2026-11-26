@@ -1,20 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: expiration-depl
+  name: expiration-redis-depl
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: expiration
+      app: expiration-redis
   template:
     metadata:
       labels:
-        app: expiration
+        app: expiration-redis
     spec:
       containers:
-        - name: expiration
-          image: redis
+        - name: expiration-redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 5
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service

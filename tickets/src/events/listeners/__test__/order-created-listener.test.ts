@@ -49,14 +49,14 @@ it('sets the userId of the ticket', async () => {
 });
 
 it('acks the message', async () => {
-  const { listener, ticket, data, msg } = await setup();
+  const { listener, data, msg } = await setup();
   await listener.onMessage(data, msg);
 
   expect(msg.ack).toHaveBeenCalled();
 });
 
 it('publishes a ticket updated event', async () => {
-  const { listener, ticket, data, msg } = await setup();
+  const { listener, data, msg } = await setup();
 
   await listener.onMessage(data, msg);
 

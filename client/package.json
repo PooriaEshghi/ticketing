@@ -3,18 +3,31 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "next"
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3000",
+    "lint": "eslint pages components hooks api lib",
+    "typecheck": "tsc --noEmit -p jsconfig.json",
+    "test:ci": "node --test test/brand.test.cjs"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@stripe/react-stripe-js": "^7.1.0",
+    "@stripe/stripe-js": "^10.4.0",
     "axios": "^1.7.7",
     "bootstrap": "^5.3.3",
     "next": "^14.2.13",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-stripe-checkout": "^2.6.3",
-    "prop-types": "^15.8.1"
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react": "^7.37.5",
+    "typescript": "^7.0.2"
   }
 }

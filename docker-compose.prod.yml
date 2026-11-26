@@ -1,0 +1,238 @@
+name: footlight
+
+services:
+  traefik:
+    image: traefik:v3.8
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=footlight
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.le.acme.email=${LETSENCRYPT_EMAIL:-admin@paidastudio.com}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --ping=true
+    ports:
+      - "80:80"
+      - "443:443"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks: [footlight]
+    restart: unless-stopped
+
+  nats:
+    build: ./infra/nats
+    image: footlight-nats:local
+    networks: [footlight]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+    networks: [footlight]
+    restart: unless-stopped
+
+  auth-mongo:
+    image: mongo:7
+    volumes: [auth-mongo:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks: [footlight]
+    restart: unless-stopped
+
+  tickets-mongo:
+    image: mongo:7
+    volumes: [tickets-mongo:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks: [footlight]
+    restart: unless-stopped
+
+  orders-mongo:
+    image: mongo:7
+    volumes: [orders-mongo:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks: [footlight]
+    restart: unless-stopped
+
+  payments-mongo:
+    image: mongo:7
+    volumes: [payments-mongo:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks: [footlight]
+    restart: unless-stopped
+
+  auth:
+    image: ghcr.io/pooriaeshghi/ticketing-auth:${IMAGE_TAG:-latest}
+    environment:
+      JWT_KEY: ${JWT_KEY:?set JWT_KEY}
+      MONGO_URI: mongodb://auth-mongo:27017/auth
+      COOKIE_SECURE: "true"
+    depends_on:
+      auth-mongo:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.auth.rule=Host(`${DOMAIN:-ticketing.paidastudio.com}`) && PathPrefix(`/api/users`)
+      - traefik.http.routers.auth.entrypoints=websecure
+      - traefik.http.routers.auth.tls.certresolver=le
+      - traefik.http.routers.auth.priority=100
+      - traefik.http.services.auth.loadbalancer.server.port=3000
+    networks: [footlight]
+    restart: unless-stopped
+
+  tickets:
+    image: ghcr.io/pooriaeshghi/ticketing-tickets:${IMAGE_TAG:-latest}
+    environment:
+      JWT_KEY: ${JWT_KEY:?set JWT_KEY}
+      MONGO_URI: mongodb://tickets-mongo:27017/tickets
+      NATS_URL: http://nats:4222
+      NATS_CLUSTER_ID: footlight
+      NATS_CLIENT_ID: tickets
+      COOKIE_SECURE: "true"
+    depends_on:
+      tickets-mongo:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tickets.rule=Host(`${DOMAIN:-ticketing.paidastudio.com}`) && PathPrefix(`/api/tickets`)
+      - traefik.http.routers.tickets.entrypoints=websecure
+      - traefik.http.routers.tickets.tls.certresolver=le
+      - traefik.http.routers.tickets.priority=100
+      - traefik.http.services.tickets.loadbalancer.server.port=3000
+    networks: [footlight]
+    restart: unless-stopped
+
+  orders:
+    image: ghcr.io/pooriaeshghi/ticketing-orders:${IMAGE_TAG:-latest}
+    environment:
+      JWT_KEY: ${JWT_KEY:?set JWT_KEY}
+      MONGO_URI: mongodb://orders-mongo:27017/orders
+      NATS_URL: http://nats:4222
+      NATS_CLUSTER_ID: footlight
+      NATS_CLIENT_ID: orders
+      COOKIE_SECURE: "true"
+    depends_on:
+      orders-mongo:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.orders.rule=Host(`${DOMAIN:-ticketing.paidastudio.com}`) && PathPrefix(`/api/orders`)
+      - traefik.http.routers.orders.entrypoints=websecure
+      - traefik.http.routers.orders.tls.certresolver=le
+      - traefik.http.routers.orders.priority=100
+      - traefik.http.services.orders.loadbalancer.server.port=3000
+    networks: [footlight]
+    restart: unless-stopped
+
+  payments:
+    image: ghcr.io/pooriaeshghi/ticketing-payments:${IMAGE_TAG:-latest}
+    environment:
+      JWT_KEY: ${JWT_KEY:?set JWT_KEY}
+      MONGO_URI: mongodb://payments-mongo:27017/payments
+      NATS_URL: http://nats:4222
+      NATS_CLUSTER_ID: footlight
+      NATS_CLIENT_ID: payments
+      STRIPE_KEY: ${STRIPE_KEY:?set STRIPE_KEY}
+      COOKIE_SECURE: "true"
+    depends_on:
+      payments-mongo:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.payments.rule=Host(`${DOMAIN:-ticketing.paidastudio.com}`) && PathPrefix(`/api/payments`)
+      - traefik.http.routers.payments.entrypoints=websecure
+      - traefik.http.routers.payments.tls.certresolver=le
+      - traefik.http.routers.payments.priority=100
+      - traefik.http.services.payments.loadbalancer.server.port=3000
+    networks: [footlight]
+    restart: unless-stopped
+
+  expiration:
+    image: ghcr.io/pooriaeshghi/ticketing-expiration:${IMAGE_TAG:-latest}
+    environment:
+      NATS_URL: http://nats:4222
+      NATS_CLUSTER_ID: footlight
+      NATS_CLIENT_ID: expiration
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks: [footlight]
+    restart: unless-stopped
+
+  client:
+    image: ghcr.io/pooriaeshghi/ticketing-client:${IMAGE_TAG:-latest}
+    environment:
+      INTERNAL_API_URL: http://traefik
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:?set STRIPE_PUBLISHABLE_KEY}
+    depends_on:
+      auth:
+        condition: service_healthy
+      tickets:
+        condition: service_healthy
+      orders:
+        condition: service_healthy
+      payments:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.client.rule=Host(`${DOMAIN:-ticketing.paidastudio.com}`) && PathPrefix(`/`)
+      - traefik.http.routers.client.entrypoints=websecure
+      - traefik.http.routers.client.tls.certresolver=le
+      - traefik.http.routers.client.priority=1
+      - traefik.http.services.client.loadbalancer.server.port=3000
+    networks: [footlight]
+    restart: unless-stopped
+
+networks:
+  footlight:
+    name: footlight
+
+volumes:
+  auth-mongo:
+  tickets-mongo:
+  orders-mongo:
+  payments-mongo:
+  letsencrypt:
